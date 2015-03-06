@@ -1,0 +1,90 @@
+PREFIX nn:   <http://www.swows.org/xml/no-namespace#>
+PREFIX svg:  <http://www.w3.org/2000/svg#>
+PREFIX html: <http://www.w3.org/1999/xhtml#>
+PREFIX p: <http://dev.w3.org/html5/2dcontext/#>
+PREFIX sf: <http://www.swows.org/function#>
+PREFIX swi: <http://www.swows.org/instance#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX : <http://www.swows.org/svg2canvas#>
+PREFIX xsvg: <http://www.swows.org/svg#>
+
+CONSTRUCT {
+
+  ?pathData xsvg:first-command ?firstCommand .
+
+  ?movetoOrLinetoCommand
+    a ?movetoOrLinetoType ;
+    a ?currRelOrAbsType ;
+    xsvg:x ?movetoOrLinetoX ;
+    xsvg:y ?movetoOrLinetoY ;
+    xsvg:next-command ?movetoOrLinetoNext .
+
+  ?lineToCommand
+    a xsvg:LinetoCommand ;
+    a ?currRelOrAbsType ;
+    xsvg:x ?linetoX ;
+    xsvg:y ?linetoY ;
+    xsvg:next-command ?linetoNext .
+
+} WHERE {
+
+  ?path
+    a svg:path ;
+    nn:d ?pathData .
+
+  BIND(
+    sf:analyze-string(
+      ?pathData,
+      "([MmZzLlHhVvCcSsQqTtAa])(?:\\s*([+-]?(?:[0-9]+|[0-9]*\\.[0-9]*)(?:[Ee][+-]?[0-9]+)?)(?:(?:\\s+,?\\s*|,\\s*)([+-]?(?:[0-9]+|[0-9]*\\.[0-9]*)(?:[Ee][+-]?[0-9]+)?))*)?"
+    ) AS ?pathData_parsed ) .
+
+  GRAPH ?pathData_parsed {
+    swi:GraphRoot sf:first-match ?first_match .
+    ?curr_match
+      sf:first-group ?group1 ;
+      sf:next-match ?next_match .
+    ?group1
+      sf:string ?command_type .
+    BIND( UCASE(?command_type) AS ?u_command_type )
+    BIND( IF( ?u_command_type = ?command_type, xsvg:AbsoluteCommand, xsvg:RelativeCommand ) AS ?currRelOrAbsType) .
+    OPTIONAL {
+      FILTER(?u_command_type = 'M' || ?u_command_type = 'L') .
+      BIND( IF( ?u_command_type = 'M', xsvg:MovetoCommand, xsvg:LinetoCommand ) AS ?movetoOrLinetoType) .
+      ?group1 sf:next-group ?group2 .
+      ?group2
+        sf:string ?MLX ;
+        sf:next-group ?group3 .
+      ?group3
+        sf:string ?MLY .
+      BIND(xsd:decimal(?MLX) AS ?movetoOrLinetoX) .
+      BIND(xsd:decimal(?MLY) AS ?movetoOrLinetoY) .
+      BIND( URI( CONCAT( STR(:command_), MD5(STR(?curr_match)) ) ) AS ?movetoOrLinetoCommand) .
+      OPTIONAL {
+        FILTER NOT EXISTS {?group3 sf:next-group ?group4} .
+        BIND( URI( CONCAT( STR(:command_), MD5(STR(?next_match)) ) ) AS ?movetoOrLinetoNext) .
+      } .
+      OPTIONAL {
+        ?group3 sf:next-group ?group4 .
+        BIND( URI( CONCAT( STR(:command_), MD5(CONCAT( STR(?curr_match), STR(?group4) )) ) ) AS ?movetoOrLinetoNext) .
+        ?group4 (sf:next-group/sf:next-group)* ?groupCurr1 .
+        ?groupCurr1
+          sf:string ?LX ;
+          sf:next-group ?groupCurr2 .
+        ?groupCurr2 sf:string ?LY .
+        BIND(xsd:decimal(?LX) AS ?lineToX) .
+        BIND(xsd:decimal(?LY) AS ?lineToY) .
+        BIND( URI( CONCAT( STR(:command_), MD5(CONCAT( STR(?curr_match), STR(?groupCurr1) )) ) ) AS ?linetoCommand) .
+        OPTIONAL {
+          ?groupCurr2 sf:next-group ?groupCurr3 .
+          BIND( URI( CONCAT( STR(:command_), MD5(CONCAT( STR(?curr_match), STR(?groupCurr3) )) ) ) AS ?linetoNext) .
+        } .
+        OPTIONAL {
+          FILTER NOT EXISTS {?groupCurr2 sf:next-group ?groupCurr3} .
+          BIND( URI( CONCAT( STR(:command_), MD5(STR(?next_match)) ) ) AS ?linetoNext) .
+        } .
+      } .
+    } .
+  } .
+
+}
+

@@ -1,0 +1,44 @@
+PREFIX nn:   <http://www.swows.org/xml/no-namespace#>
+PREFIX svg:  <http://www.w3.org/2000/svg#>
+PREFIX html: <http://www.w3.org/1999/xhtml#>
+PREFIX p: <http://dev.w3.org/html5/2dcontext/#>
+PREFIX sf: <http://www.swows.org/function#>
+PREFIX swi: <http://www.swows.org/instance#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX : <http://www.swows.org/svg2canvas#>
+
+CONSTRUCT {
+
+  html:canvas
+    nn:width ?svgWidth ;
+    nn:height ?svgHeight ;
+    p:contextScript ?script1 .
+
+  ?script1
+    a p:scale ;
+    p:x ?viewBox_parsed ;
+    p:y ?svgHeight ;
+    p:next ?script2 .
+
+  ?script2
+    a p:translate ;
+    p:x ?svgWidth ;
+    p:y ?svgHeight .
+
+} WHERE {
+
+  ?svg
+    a svg:svg ;
+#    nn:x ?svgX ;
+#    nn:y ?svgY ;
+    nn:width ?svgWidth ;
+    nn:height ?svgHeight ;
+    nn:viewBox ?viewBox .
+
+  BIND( sf:analyze-string(?viewBox, "\\S") AS ?viewBox_parsed ) .
+
+  BIND( URI( CONCAT( STR(:script1_), MD5(STR(?svg)) ) ) AS ?script1 ) .
+  BIND( URI( CONCAT( STR(:script2_), MD5(STR(?svg)) ) ) AS ?script2 ) .
+
+}
+
